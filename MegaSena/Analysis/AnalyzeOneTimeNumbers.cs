@@ -20,7 +20,7 @@ namespace MegaSena
     {
         public static void Analyze()
         {
-            string outputFolder = Path.Combine("Output", "MegaSena");
+            string outputFolder = FindOutputFolder();
             var files = Directory.GetFiles(outputFolder, "*.csv");
             
             // Track which numbers have been drawn exactly 1 time in at least one cycle
@@ -70,6 +70,30 @@ namespace MegaSena
             }
             
             Console.WriteLine("\n=== END OF ANALYSIS ===\n");
+        }
+
+        private static string FindOutputFolder()
+        {
+            string[] possiblePaths = new[]
+            {
+                Path.Combine("Output", "MegaSena"),
+                Path.Combine("..", "..", "..", "..", "Output", "MegaSena"),
+                Path.Combine(Directory.GetCurrentDirectory(), "Output", "MegaSena"),
+                Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "Output", "MegaSena")
+            };
+
+            foreach (var path in possiblePaths)
+            {
+                try
+                {
+                    var fullPath = Path.GetFullPath(path);
+                    if (Directory.Exists(fullPath))
+                        return fullPath;
+                }
+                catch { continue; }
+            }
+
+            return Path.GetFullPath(Path.Combine("Output", "MegaSena"));
         }
     }
 }

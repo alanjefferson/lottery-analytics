@@ -11,7 +11,8 @@ namespace MegaSena.Core
 		{
             List<MegaSenaDraw> lstMegaSena = new List<MegaSenaDraw>();
 
-            string filePath = Path.Combine("MegaSena", "Input", "Mega-Sena.xlsx");
+            // Find the Input folder - works from both repository root and bin/Debug/net6.0
+            string filePath = FindInputFile("Mega-Sena.xlsx");
             using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(filePath, false))
             {
                 WorkbookPart? workbookPart = spreadsheetDocument.WorkbookPart;
@@ -50,6 +51,38 @@ namespace MegaSena.Core
             }
             
             return lstMegaSena;
+		}
+
+		private static string FindInputFile(string fileName)
+		{
+			// Try multiple possible paths to support both VS Code and Visual Studio
+			string[] possiblePaths = new[]
+			{
+				// From repository root (VS Code, dotnet run)
+				Path.Combine("MegaSena", "Input", fileName),
+				// From bin/Debug/net6.0 (Visual Studio)
+				Path.Combine("..", "..", "..", "Input", fileName),
+				// From MegaSena project directory
+				Path.Combine("Input", fileName),
+				// Absolute path fallback - navigate up from current directory
+				Path.Combine(Directory.GetCurrentDirectory(), "MegaSena", "Input", fileName),
+				Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "Input", fileName)
+			};
+
+			foreach (var path in possiblePaths)
+			{
+				var fullPath = Path.GetFullPath(path);
+				if (File.Exists(fullPath))
+				{
+					return fullPath;
+				}
+			}
+
+			// If not found, throw a helpful error
+			throw new FileNotFoundException(
+				$"Could not find '{fileName}' in any of the expected locations. " +
+				$"Current directory: {Directory.GetCurrentDirectory()}. " +
+				$"Please ensure the file exists in MegaSena/Input/ folder.");
 		}
 	}
 }

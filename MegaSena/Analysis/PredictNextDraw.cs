@@ -260,7 +260,7 @@ namespace MegaSena
             state.RemainingNumbers = new List<int>();
 
             // Find the in-progress CSV file
-            string outputFolder = Path.Combine("Output", "MegaSena");
+            string outputFolder = FindOutputFolder();
             var inProgressFile = Directory.GetFiles(outputFolder, "*InProgress*.csv").FirstOrDefault();
 
             if (inProgressFile == null)
@@ -302,6 +302,40 @@ namespace MegaSena
             }
 
             return state;
+        }
+
+        private static string FindOutputFolder()
+        {
+            // Try multiple possible paths to support both VS Code and Visual Studio
+            string[] possiblePaths = new[]
+            {
+                // From repository root (VS Code, dotnet run)
+                Path.Combine("Output", "MegaSena"),
+                // From bin/Debug/net6.0 (Visual Studio)
+                Path.Combine("..", "..", "..", "..", "Output", "MegaSena"),
+                // Absolute path from current directory
+                Path.Combine(Directory.GetCurrentDirectory(), "Output", "MegaSena"),
+                Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "Output", "MegaSena")
+            };
+
+            foreach (var path in possiblePaths)
+            {
+                try
+                {
+                    var fullPath = Path.GetFullPath(path);
+                    if (Directory.Exists(fullPath))
+                    {
+                        return fullPath;
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+
+            // Fallback to first path
+            return Path.GetFullPath(Path.Combine("Output", "MegaSena"));
         }
     }
 }

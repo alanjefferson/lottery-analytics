@@ -10,14 +10,52 @@ namespace MegaSena.Core
     /// </summary>
     public static class CycleResultsWriter
     {
-        private static readonly string OutputFolder = Path.Combine("Output", "MegaSena");
+        private static string GetOutputFolder()
+        {
+            // Try multiple possible paths to support both VS Code and Visual Studio
+            string[] possibleBasePaths = new[]
+            {
+                // From repository root (VS Code, dotnet run)
+                Path.Combine("Output", "MegaSena"),
+                // From bin/Debug/net6.0 (Visual Studio)
+                Path.Combine("..", "..", "..", "..", "Output", "MegaSena"),
+                // Absolute path from current directory
+                Path.Combine(Directory.GetCurrentDirectory(), "Output", "MegaSena"),
+                Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "Output", "MegaSena")
+            };
+
+            // Try to find an existing Output folder or use the first valid path
+            foreach (var basePath in possibleBasePaths)
+            {
+                try
+                {
+                    var fullPath = Path.GetFullPath(basePath);
+                    var parentDir = Path.GetDirectoryName(fullPath);
+
+                    // If parent directory exists or can be created, use this path
+                    if (parentDir != null && (Directory.Exists(parentDir) || Directory.Exists(Path.GetDirectoryName(parentDir))))
+                    {
+                        return fullPath;
+                    }
+                }
+                catch
+                {
+                    // Skip invalid paths
+                    continue;
+                }
+            }
+
+            // Fallback: use repository root approach
+            return Path.GetFullPath(Path.Combine("Output", "MegaSena"));
+        }
         
         public static void WriteCycleToCSV(Cycle objCycle, DateTime? endCycleDate = null, int lastNumber = 0, bool isLastCycle = false)
         {
-            EnsureOutputFolderExists();
-            
+            string outputFolder = GetOutputFolder();
+            EnsureOutputFolderExists(outputFolder);
+
             string fileName = GenerateFileName(endCycleDate, lastNumber, isLastCycle);
-            string filePath = Path.Combine(OutputFolder, fileName);
+            string filePath = Path.Combine(outputFolder, fileName);
             
             var csvContent = new StringBuilder();
             
@@ -69,11 +107,11 @@ namespace MegaSena.Core
             Console.WriteLine($"{cycleInfo} - Output saved to: {fileName}");
         }
         
-        private static void EnsureOutputFolderExists()
+        private static void EnsureOutputFolderExists(string outputFolder)
         {
-            if (!Directory.Exists(OutputFolder))
+            if (!Directory.Exists(outputFolder))
             {
-                Directory.CreateDirectory(OutputFolder);
+                Directory.CreateDirectory(outputFolder);
             }
         }
         
