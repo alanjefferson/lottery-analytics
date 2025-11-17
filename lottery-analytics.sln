@@ -5,6 +5,8 @@ VisualStudioVersion = 17.7.34202.233
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MegaSena", "MegaSena\MegaSena.csproj", "{F26D5C95-6C51-4812-AEFC-34D817F7D75C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MegaSena.Api", "MegaSena.Api\MegaSena.Api.csproj", "{C6C6F4EC-18B4-4A24-B6E8-FCF5A73A115F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{F26D5C95-6C51-4812-AEFC-34D817F7D75C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F26D5C95-6C51-4812-AEFC-34D817F7D75C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F26D5C95-6C51-4812-AEFC-34D817F7D75C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C6C6F4EC-18B4-4A24-B6E8-FCF5A73A115F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C6C6F4EC-18B4-4A24-B6E8-FCF5A73A115F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C6C6F4EC-18B4-4A24-B6E8-FCF5A73A115F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C6C6F4EC-18B4-4A24-B6E8-FCF5A73A115F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
