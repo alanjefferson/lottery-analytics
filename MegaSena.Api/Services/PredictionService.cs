@@ -1,12 +1,11 @@
 using MegaSena.Api.Models;
-using MegaSena.Core;
-using MegaSena.Entity;
 using MegaSena.Models;
 
 namespace MegaSena.Api.Services
 {
     /// <summary>
     /// Service for generating MegaSena predictions
+    /// Wraps the existing PredictNextDraw analysis logic and converts to API DTOs
     /// </summary>
     public class PredictionService
     {
@@ -16,13 +15,10 @@ namespace MegaSena.Api.Services
         /// <returns>Prediction response with recommendations and scenarios</returns>
         public PredictionResponse GetNextDrawPrediction()
         {
-            // Read all MegaSena draws
-            List<MegaSenaDraw> lstMegaSena = MegaSenaResults.ReadMegaSenaXLSX();
+            // Use the existing PredictNextDraw class to get cycle state from CSV
+            var cycleState = PredictNextDraw.GetCurrentCycleStateFromCSV();
 
-            // Get current cycle state
-            var cycleState = GetCurrentCycleState(lstMegaSena);
-
-            if (cycleState.RemainingNumbers.Count == 0)
+            if (cycleState == null || cycleState.RemainingNumbers.Count == 0)
             {
                 return new PredictionResponse
                 {
@@ -31,198 +27,73 @@ namespace MegaSena.Api.Services
                     FrequencyDistribution = new List<FrequencyGroup>(),
                     RecommendedBets = new List<BettingRecommendation>(),
                     Scenarios = new List<ScenarioPrediction>(),
-                    CurrentCycle = cycleState.CycleInfo
+                    CurrentCycle = null
                 };
             }
 
-            // Generate predictions using the existing logic
-            var predictions = GeneratePredictions(lstMegaSena, cycleState);
+            // Convert cycle state to API response format
+            var response = ConvertToApiResponse(cycleState);
 
-            return predictions;
+            return response;
         }
 
-        private CycleStateInfo GetCurrentCycleState(List<MegaSenaDraw> draws)
-        {
-            var state = new CycleStateInfo();
-            
-            // Track which numbers have been drawn
-            bool[] drawnNumbers = new bool[61]; // 1-60
-            Cycle currentCycle = new Cycle();
-            DateTime? cycleStartDate = null;
-            int drawsInCycle = 0;
-
-            for (int i = 0; i < draws.Count; i++)
-            {
-                var draw = draws[i];
-                
-                if (cycleStartDate == null)
-                    cycleStartDate = draw.DataDoSorteio;
-
-                drawsInCycle++;
-
-                // Mark numbers as drawn and update cycle
-                int[] numbers = { draw.Bola1, draw.Bola2, draw.Bola3, draw.Bola4, draw.Bola5, draw.Bola6 };
-                foreach (int num in numbers)
-                {
-                    if (!drawnNumbers[num])
-                    {
-                        drawnNumbers[num] = true;
-                        currentCycle.CycleNumbers[num - 1].Times++;
-                    }
-                    else
-                    {
-                        currentCycle.CycleNumbers[num - 1].Times++;
-                    }
-                    currentCycle.CycleNumbers[num - 1].LastDrawn = draw.DataDoSorteio;
-                }
-
-                // Check if cycle is complete
-                bool cycleComplete = true;
-                for (int n = 1; n <= 60; n++)
-                {
-                    if (!drawnNumbers[n])
-                    {
-                        cycleComplete = false;
-                        break;
-                    }
-                }
-
-                // If cycle complete and not last draw, reset for new cycle
-                if (cycleComplete && i < draws.Count - 1)
-                {
-                    drawnNumbers = new bool[61];
-                    currentCycle = new Cycle();
-                    cycleStartDate = null;
-                    drawsInCycle = 0;
-                }
-            }
-
-            // Get remaining numbers
-            for (int n = 1; n <= 60; n++)
-            {
-                if (!drawnNumbers[n])
-                {
-                    state.RemainingNumbers.Add(n);
-                }
-            }
-
-            state.CurrentCycle = currentCycle;
-            state.CycleInfo = new CycleInfo
-            {
-                StartDate = cycleStartDate,
-                LastConcurso = draws.Last().Concurso,
-                DrawsInCycle = drawsInCycle,
-                DaysSinceStart = cycleStartDate.HasValue 
-                    ? (DateTime.Now - cycleStartDate.Value).Days 
-                    : 0
-            };
-
-            return state;
-        }
-
-        private PredictionResponse GeneratePredictions(List<MegaSenaDraw> draws, CycleStateInfo cycleState)
+        /// <summary>
+        /// Convert CycleState from Analysis layer to API response format
+        /// </summary>
+        private PredictionResponse ConvertToApiResponse(CycleState cycleState)
         {
             var response = new PredictionResponse
             {
                 RemainingNumbers = cycleState.RemainingNumbers,
                 TotalRemaining = cycleState.RemainingNumbers.Count,
-                CurrentCycle = cycleState.CycleInfo
+                CurrentCycle = null // We don't have cycle info from CSV, could be enhanced later
             };
 
-            // Build frequency distribution
-            var frequencyGroups = new Dictionary<int, List<int>>();
-            for (int i = 0; i < 60; i++)
-            {
-                int times = cycleState.CurrentCycle.CycleNumbers[i].Times;
-                int number = cycleState.CurrentCycle.CycleNumbers[i].Number;
-
-                if (!frequencyGroups.ContainsKey(times))
-                    frequencyGroups[times] = new List<int>();
-
-                frequencyGroups[times].Add(number);
-            }
-
-            // Convert to FrequencyGroup list for API response
-            response.FrequencyDistribution = frequencyGroups
-                .OrderByDescending(x => x.Key)
-                .Select(x => new FrequencyGroup
+            // Build frequency distribution from cycle state
+            var frequencyGroups = cycleState.CycleNumbers
+                .Where(cn => cn.Drawn)
+                .GroupBy(cn => cn.Times)
+                .OrderByDescending(g => g.Key)
+                .Select(g => new FrequencyGroup
                 {
-                    Frequency = x.Key,
-                    Numbers = x.Value.OrderBy(n => n).ToList()
+                    Frequency = g.Key,
+                    Numbers = g.Select(cn => cn.Number).OrderBy(n => n).ToList()
                 })
                 .ToList();
 
-            // Generate scenarios and recommendations
-            // This is a simplified version - you can enhance it with the full PredictNextDraw logic
-            response.Scenarios = GenerateScenarios(cycleState, frequencyGroups);
-            response.RecommendedBets = GenerateRecommendedBets(cycleState, frequencyGroups);
+            response.FrequencyDistribution = frequencyGroups;
+
+            // Generate scenarios using the existing PredictNextDraw logic
+            response.Scenarios = GenerateScenarios(cycleState);
+            response.RecommendedBets = GenerateRecommendedBets(cycleState);
 
             return response;
         }
 
-        private List<ScenarioPrediction> GenerateScenarios(CycleStateInfo cycleState, Dictionary<int, List<int>> frequencyGroups)
+        /// <summary>
+        /// Generate prediction scenarios using the existing PredictNextDraw logic
+        /// </summary>
+        private List<ScenarioPrediction> GenerateScenarios(CycleState cycleState)
         {
             var scenarios = new List<ScenarioPrediction>();
 
-            // Get numbers by frequency for strategies
-            var mostCommonFreq = frequencyGroups.Keys.Max();
-            var mostCommonNumbers = frequencyGroups[mostCommonFreq];
-
-            foreach (var remainingNum in cycleState.RemainingNumbers.Take(3)) // Top 3 scenarios
+            // Generate scenarios for each remaining number using the existing logic
+            foreach (var remainingNum in cycleState.RemainingNumbers)
             {
+                // Use the existing PredictNextDraw.GeneratePredictionSet method
+                var predictions = PredictNextDraw.GeneratePredictionSet(cycleState, remainingNum);
+
                 var scenario = new ScenarioPrediction
                 {
                     RemainingNumber = remainingNum,
-                    Strategies = new List<StrategyBet>()
+                    Strategies = predictions.Select(p => new StrategyBet
+                    {
+                        StrategyName = ExtractStrategyName(p.Rationale),
+                        Description = p.Rationale,
+                        Numbers = p.Numbers.OrderBy(n => n).ToList(),
+                        FormattedBet = string.Join("-", p.Numbers.OrderBy(n => n))
+                    }).ToList()
                 };
-
-                // Strategy 1: Most common frequency
-                var strategy1Numbers = new List<int> { remainingNum };
-                strategy1Numbers.AddRange(mostCommonNumbers.Where(n => n != remainingNum).Take(5));
-                scenario.Strategies.Add(new StrategyBet
-                {
-                    StrategyName = "Most Common",
-                    Description = $"Numbers drawn {mostCommonFreq} times",
-                    Numbers = strategy1Numbers.OrderBy(n => n).ToList(),
-                    FormattedBet = string.Join("-", strategy1Numbers.OrderBy(n => n))
-                });
-
-                // Strategy 2: Mid-range frequency (2-4 times)
-                var midRangeNumbers = frequencyGroups
-                    .Where(kvp => kvp.Key >= 2 && kvp.Key <= 4)
-                    .SelectMany(kvp => kvp.Value)
-                    .Where(n => n != remainingNum)
-                    .OrderBy(n => n)
-                    .Take(5)
-                    .ToList();
-
-                var strategy2Numbers = new List<int> { remainingNum };
-                strategy2Numbers.AddRange(midRangeNumbers);
-                scenario.Strategies.Add(new StrategyBet
-                {
-                    StrategyName = "Mid-Range",
-                    Description = "Mix of numbers drawn 2-4 times",
-                    Numbers = strategy2Numbers.OrderBy(n => n).ToList(),
-                    FormattedBet = string.Join("-", strategy2Numbers.OrderBy(n => n))
-                });
-
-                // Strategy 3: Balanced approach
-                var balancedNumbers = frequencyGroups
-                    .OrderByDescending(kvp => kvp.Key)
-                    .SelectMany(kvp => kvp.Value)
-                    .Where(n => n != remainingNum)
-                    .Take(5)
-                    .ToList();
-
-                var strategy3Numbers = new List<int> { remainingNum };
-                strategy3Numbers.AddRange(balancedNumbers);
-                scenario.Strategies.Add(new StrategyBet
-                {
-                    StrategyName = "Balanced",
-                    Description = "Balanced frequency distribution",
-                    Numbers = strategy3Numbers.OrderBy(n => n).ToList(),
-                    FormattedBet = string.Join("-", strategy3Numbers.OrderBy(n => n))
-                });
 
                 scenarios.Add(scenario);
             }
@@ -230,40 +101,48 @@ namespace MegaSena.Api.Services
             return scenarios;
         }
 
-        private List<BettingRecommendation> GenerateRecommendedBets(CycleStateInfo cycleState, Dictionary<int, List<int>> frequencyGroups)
+        /// <summary>
+        /// Generate recommended bets using the existing PredictNextDraw logic
+        /// </summary>
+        private List<BettingRecommendation> GenerateRecommendedBets(CycleState cycleState)
         {
             var recommendations = new List<BettingRecommendation>();
 
-            // Generate top 3 recommendations using mid-range strategy
-            var midRangeNumbers = frequencyGroups
-                .Where(kvp => kvp.Key >= 2 && kvp.Key <= 4)
-                .SelectMany(kvp => kvp.Value)
-                .OrderBy(n => n)
-                .ToList();
-
-            foreach (var remainingNum in cycleState.RemainingNumbers.Take(3))
+            // Generate top recommendations (one per remaining number, using mid-range strategy)
+            foreach (var remainingNum in cycleState.RemainingNumbers.Take(5))
             {
-                var betNumbers = new List<int> { remainingNum };
-                betNumbers.AddRange(midRangeNumbers.Where(n => n != remainingNum).Take(5));
-                betNumbers = betNumbers.OrderBy(n => n).ToList();
+                // Use the existing mid-range strategy from PredictNextDraw
+                var prediction = PredictNextDraw.GeneratePredictionByFrequencyRange(
+                    cycleState,
+                    remainingNum,
+                    2,
+                    4,
+                    $"Mid-range frequency (2-4 times) with remaining number {remainingNum}");
 
                 recommendations.Add(new BettingRecommendation
                 {
-                    Numbers = betNumbers,
-                    Strategy = "Mid-range frequency (2-4 times)",
+                    Numbers = prediction.Numbers.OrderBy(n => n).ToList(),
+                    Strategy = prediction.Rationale,
                     RemainingNumberIncluded = remainingNum,
-                    FormattedBet = string.Join("-", betNumbers)
+                    FormattedBet = string.Join("-", prediction.Numbers.OrderBy(n => n))
                 });
             }
 
             return recommendations;
         }
 
-        private class CycleStateInfo
+        /// <summary>
+        /// Extract a short strategy name from the rationale
+        /// </summary>
+        private string ExtractStrategyName(string rationale)
         {
-            public List<int> RemainingNumbers { get; set; } = new();
-            public Cycle CurrentCycle { get; set; } = new();
-            public CycleInfo? CycleInfo { get; set; }
+            if (rationale.Contains("Most common"))
+                return "Most Common";
+            if (rationale.Contains("Mid-range"))
+                return "Mid-Range";
+            if (rationale.Contains("Balanced"))
+                return "Balanced";
+            return "Strategy";
         }
     }
 }

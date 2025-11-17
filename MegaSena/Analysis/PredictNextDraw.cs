@@ -162,22 +162,25 @@ namespace MegaSena
             }
         }
 
-        private static List<Prediction> GeneratePredictionSet(CycleState cycle, int includedRemainingNumber)
+        /// <summary>
+        /// Generate a set of predictions for a specific remaining number
+        /// </summary>
+        public static List<Prediction> GeneratePredictionSet(CycleState cycle, int includedRemainingNumber)
         {
             var predictions = new List<Prediction>();
-            
+
             // Prediction 1: Focus on frequency 3 (most common in analysis)
-            predictions.Add(GeneratePredictionByFrequency(cycle, includedRemainingNumber, 3, 
+            predictions.Add(GeneratePredictionByFrequency(cycle, includedRemainingNumber, 3,
                 "Most common: Numbers drawn 3 times (22.7% probability)"));
-            
+
             // Prediction 2: Focus on frequency 2-4 range (62.5% combined)
             predictions.Add(GeneratePredictionByFrequencyRange(cycle, includedRemainingNumber, 2, 4,
                 "Mid-range: Mix of numbers drawn 2-4 times (62.5% combined probability)"));
-            
+
             // Prediction 3: Balanced approach with average frequency ~3
             predictions.Add(GenerateBalancedPrediction(cycle, includedRemainingNumber,
                 "Balanced: Average frequency ~3.08 based on historical data"));
-            
+
             return predictions;
         }
         
@@ -208,7 +211,10 @@ namespace MegaSena
             return new Prediction { Numbers = candidates, Rationale = rationale };
         }
         
-        private static Prediction GeneratePredictionByFrequencyRange(CycleState cycle, int includedNum, int minFreq, int maxFreq, string rationale)
+        /// <summary>
+        /// Generate a prediction using numbers within a frequency range
+        /// </summary>
+        public static Prediction GeneratePredictionByFrequencyRange(CycleState cycle, int includedNum, int minFreq, int maxFreq, string rationale)
         {
             var candidates = cycle.CycleNumbers
                 .Where(cn => cn.Drawn && cn.Times >= minFreq && cn.Times <= maxFreq)
@@ -216,9 +222,9 @@ namespace MegaSena
                 .Take(5)
                 .Select(cn => cn.Number)
                 .ToList();
-            
+
             candidates.Add(includedNum);
-            
+
             return new Prediction { Numbers = candidates, Rationale = rationale };
         }
         
@@ -253,7 +259,10 @@ namespace MegaSena
             return new Prediction { Numbers = candidates.Take(6).ToList(), Rationale = rationale };
         }
         
-        private static CycleState GetCurrentCycleStateFromCSV()
+        /// <summary>
+        /// Get the current cycle state from the in-progress CSV file
+        /// </summary>
+        public static CycleState GetCurrentCycleStateFromCSV()
         {
             var state = new CycleState();
             state.CycleNumbers = new List<CycleNumber>();
@@ -304,17 +313,25 @@ namespace MegaSena
             return state;
         }
 
-        private static string FindOutputFolder()
+        /// <summary>
+        /// Find the Output/MegaSena folder from various possible working directories
+        /// </summary>
+        public static string FindOutputFolder()
         {
-            // Try multiple possible paths to support both VS Code and Visual Studio
+            // Try multiple possible paths to support VS Code, Visual Studio, and API project
             string[] possiblePaths = new[]
             {
                 // From repository root (VS Code, dotnet run)
                 Path.Combine("Output", "MegaSena"),
+                // From MegaSena.Api folder (API project)
+                Path.Combine("..", "Output", "MegaSena"),
                 // From bin/Debug/net6.0 (Visual Studio)
                 Path.Combine("..", "..", "..", "..", "Output", "MegaSena"),
+                // From bin/Debug/net9.0 (API project in Visual Studio)
+                Path.Combine("..", "..", "..", "..", "..", "Output", "MegaSena"),
                 // Absolute path from current directory
                 Path.Combine(Directory.GetCurrentDirectory(), "Output", "MegaSena"),
+                Path.Combine(Directory.GetCurrentDirectory(), "..", "Output", "MegaSena"),
                 Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "..", "Output", "MegaSena")
             };
 
